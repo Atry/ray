@@ -28,6 +28,8 @@ from ray_release.util import (
     get_write_state_machine_aws_bucket,
 )
 
+MICROCHECK_COMMAND = "@microcheck"
+
 AWS_TEST_KEY = "ray_tests"
 AWS_TEST_RESULT_KEY = "ray_test_results"
 DEFAULT_PYTHON_VERSION = tuple(
@@ -220,6 +222,47 @@ class Test(dict):
                 step_id_to_tests[step_id] = step_id_to_tests.get(step_id, []) + [test]
 
         return step_id_to_tests
+
+    @classmethod
+    def get_human_specified_tests(cls, bazel_workspace_dir: str) -> Set[str]:
+        """
+        Get all test targets that are specified by humans
+        """
+        base = os.environ.get("BUILDKITE_PULL_REQUEST_BASE_BRANCH")
+        head = os.environ.get("BUILDKITE_COMMIT")
+        if not base or not head:
+            # if not in a PR, return an empty set
+            return set()
+
+        tests = set()
+        messages = subprocess.check_output(
+            ["git", "rev-list", "--format=%b", f"origin/{base}...{head}"],
+            cwd=bazel_workspace_dir,
+        )
+        for message in messages.decode().splitlines():
+            if not message.startswith(MICROCHECK_COMMAND):
+                continue
+            tests = tests.union(message[len(MICROCHECK_COMMAND) :].strip().split(" "))
+
+        return tests
+
+    @classmethod
+    def get_new_tests(cls, prefix: str, bazel_workspace_dir: str) -> Set[str]:
+        """
+        Get all local test targets that are not in database
+        """
+        local_test_targets = (
+            subprocess.check_output(
+                ["bazel", "query", "tests(//...)"],
+                cwd=bazel_workspace_dir,
+            )
+            .decode()
+            .strip()
+            .split(os.linesep)
+        )
+        db_test_targets = {test.get_target() for test in cls.gen_from_s3(prefix=prefix)}
+
+        return set(local_test_targets).difference(db_test_targets)
 
     @classmethod
     def get_changed_tests(cls, bazel_workspace_dir: str) -> Set[str]:

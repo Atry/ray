@@ -408,5 +408,27 @@ def test_get_changed_tests(
     assert Test.get_changed_tests("") == {"//t1", "//t2"}
 
 
+@mock.patch("subprocess.check_output")
+@mock.patch("ray_release.test.Test.gen_from_s3")
+def test_get_new_tests(mock_gen_from_s3, mock_check_output) -> None:
+    mock_gen_from_s3.return_value = [
+        _stub_test({"name": "linux://old_test_01"}),
+        _stub_test({"name": "linux://old_test_02"}),
+    ]
+    mock_check_output.return_value = b"//old_test_01\n//new_test"
+    assert Test.get_new_tests("linux", "") == {"//new_test"}
+
+
+@mock.patch.dict(
+    os.environ,
+    {"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "base", "BUILDKITE_COMMIT": "commit"},
+)
+@mock.patch("subprocess.check_call")
+@mock.patch("subprocess.check_output")
+def test_get_human_specified_tests(mock_check_output, mock_check_call) -> None:
+    mock_check_output.return_value = b"hi\n@microcheck //test01 //test02\nthere"
+    assert Test.get_human_specified_tests("") == {"//test01", "//test02"}
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main(["-v", __file__]))
