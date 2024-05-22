@@ -13,7 +13,6 @@ from ci.ray_ci.tester import (
     _get_container,
     _get_all_test_query,
     _get_test_targets,
-    _get_high_impact_test_targets,
     _get_flaky_test_targets,
     _get_tag_matcher,
 )
@@ -121,14 +120,8 @@ def test_get_test_targets() -> None:
             "ray_release.test.Test.gen_from_s3",
             return_value=test_objects,
         ), mock.patch(
-            "ray_release.test.Test.gen_high_impact_tests",
-            return_value={"step": test_objects},
-        ), mock.patch(
-            "ray_release.test.Test.get_changed_tests",
-            return_value=set(),
-        ), mock.patch(
-            "ray_release.test.Test.get_new_tests",
-            return_value=set(),
+            "ray_release.test.Test.gen_microcheck_tests",
+            return_value={test.get_target() for test in test_objects},
         ):
             assert set(
                 _get_test_targets(
@@ -208,64 +201,6 @@ def test_get_all_test_query() -> None:
         "intersect (attr(tags, '\\\\btag2\\\\b', tests(a))) "
         "except (attr(tags, '\\\\btag1\\\\b', tests(a)))"
     )
-
-
-def test_get_high_impact_test_targets() -> None:
-    test_harness = [
-        {
-            "input": [],
-            "new_tests": set(),
-            "changed_tests": set(),
-            "human_tests": set(),
-            "output": set(),
-        },
-        {
-            "input": [
-                _stub_test(
-                    {
-                        "name": "linux://core_good",
-                        "team": "core",
-                    }
-                ),
-                _stub_test(
-                    {
-                        "name": "linux://serve_good",
-                        "team": "serve",
-                    }
-                ),
-            ],
-            "new_tests": {"//core_new"},
-            "changed_tests": {"//core_new"},
-            "human_tests": {"//human_test"},
-            "output": {
-                "//core_good",
-                "//core_new",
-                "//human_test",
-            },
-        },
-    ]
-    for test in test_harness:
-        with mock.patch(
-            "ray_release.test.Test.gen_high_impact_tests",
-            return_value={"step": test["input"]},
-        ), mock.patch(
-            "ray_release.test.Test.get_new_tests",
-            return_value=test["new_tests"],
-        ), mock.patch(
-            "ray_release.test.Test.get_changed_tests",
-            return_value=test["changed_tests"],
-        ), mock.patch(
-            "ray_release.test.Test.get_human_specified_tests",
-            return_value=test["human_tests"],
-        ):
-            assert (
-                _get_high_impact_test_targets(
-                    "core",
-                    "linux",
-                    LinuxTesterContainer("test", skip_ray_installation=True),
-                )
-                == test["output"]
-            )
 
 
 def test_get_flaky_test_targets() -> None:
