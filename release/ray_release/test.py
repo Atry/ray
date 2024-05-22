@@ -237,6 +237,20 @@ class Test(dict):
         """
         Obtain all microcheck tests with the given prefix
         """
+        high_impact_tests = Test._gen_high_impact_tests(prefix, team)
+        new_tests = Test._get_new_tests(prefix, bazel_workspace_dir)
+        changed_tests = Test._get_changed_tests(bazel_workspace_dir)
+        human_specified_tests = Test._get_human_specified_tests(bazel_workspace_dir)
+
+        return high_impact_tests.union(new_tests, changed_tests, human_specified_tests)
+
+    @classmethod
+    def _gen_high_impact_tests(
+        cls, prefix: str, team: Optional[str] = None
+    ) -> Set[str]:
+        """
+        Obtain all high impact tests with the given prefix
+        """
         high_impact_tests = [
             test for test in cls.gen_from_s3(prefix) if test.is_high_impact()
         ]
@@ -245,19 +259,10 @@ class Test(dict):
                 test for test in high_impact_tests if test.get_oncall() == team
             ]
 
-        high_impact_test_targets = {test.get_target() for test in high_impact_tests}
-        new_test_targets = Test.get_new_tests(prefix, bazel_workspace_dir)
-        changed_test_targets = Test.get_changed_tests(bazel_workspace_dir)
-        human_specified_test_targets = Test.get_human_specified_tests(
-            bazel_workspace_dir
-        )
-
-        return high_impact_test_targets.union(
-            new_test_targets, changed_test_targets, human_specified_test_targets
-        )
+        return {test.get_target() for test in high_impact_tests}
 
     @classmethod
-    def get_human_specified_tests(cls, bazel_workspace_dir: str) -> Set[str]:
+    def _get_human_specified_tests(cls, bazel_workspace_dir: str) -> Set[str]:
         """
         Get all test targets that are specified by humans
         """
@@ -280,7 +285,7 @@ class Test(dict):
         return tests
 
     @classmethod
-    def get_new_tests(cls, prefix: str, bazel_workspace_dir: str) -> Set[str]:
+    def _get_new_tests(cls, prefix: str, bazel_workspace_dir: str) -> Set[str]:
         """
         Get all local test targets that are not in database
         """
@@ -298,7 +303,7 @@ class Test(dict):
         return set(local_test_targets).difference(db_test_targets)
 
     @classmethod
-    def get_changed_tests(cls, bazel_workspace_dir: str) -> Set[str]:
+    def _get_changed_tests(cls, bazel_workspace_dir: str) -> Set[str]:
         """
         Get all changed tests in the current PR
         """
